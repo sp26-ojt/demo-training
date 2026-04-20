@@ -1,0 +1,128 @@
+- hosts: student-vm
+  become: yes
+  vars:
+    dynamic_flag_secret: "sp26"
+    dynamic_flag_interval_minutes: 1
+    lab_user: "user"
+
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - python3
+          - curl
+          - openssh-server
+          - cron
+        update_cache: yes
+
+    - name: Ensure SSH service is enabled
+      systemd:
+        name: ssh
+        enabled: yes
+        state: started
+
+    - name: Ensure cron service is enabled
+      systemd:
+        name: cron
+        enabled: yes
+        state: started
+
+    - name: Create lab user
+      user:
+        name: "{{ lab_user }}"
+        shell: /bin/bash
+        create_home: yes
+
+    - name: Create .ssh directory
+      file:
+        path: "/home/{{ lab_user }}/.ssh"
+        state: directory
+        owner: "{{ lab_user }}"
+        group: "{{ lab_user }}"
+        mode: "0700"
+
+    - name: Create lab directory
+      file:
+        path: "/home/{{ lab_user }}/lab"
+        state: directory
+        owner: "{{ lab_user }}"
+        group: "{{ lab_user }}"
+        mode: "0755"
+
+    - name: Create local dynamic flag generator
+      copy:
+        dest: /usr/local/bin/update_flag.py
+        mode: "0755"
+        content: |
+          #!/usr/bin/env python3
+          import hmac
+          import hashlib
+          import time
+          from pathlib import Path
+
+          SECRET = "{{ dynamic_flag_secret }}"
+          INTERVAL_MINUTES = {{ dynamic_flag_interval_minutes }}
+
+          def generate_flag():
+              slot = int(time.time()) // (INTERVAL_MINUTES * 60)
+              digest = hmac.new(
+                  SECRET.encode(),
+                  str(slot).encode(),
+                  hashlib.sha256
+              ).hexdigest()[:16]
+              return "FLAG{" + digest + "}"
+
+          def main():
+              flag = generate_flag()
+              path = Path("/home/{{ lab_user }}/lab/key.txt")
+              path.write_text(flag + "\n", encoding="utf-8")
+
+          if __name__ == "__main__":
+              main()
+
+    - name: Run initial flag update
+      command: python3 /usr/local/bin/update_flag.py
+
+    - name: Fix ownership of generated files
+      file:
+        path: "/home/{{ lab_user }}/lab/key.txt"
+        owner: "{{ lab_user }}"
+        group: "{{ lab_user }}"
+        mode: "0644"
+
+    - name: Update flag every minute
+      cron:
+        name: "Update Dynamic Lab Flag"
+        minute: "*"
+        job: "python3 /usr/local/bin/update_flag.py && chown {{ lab_user }}:{{ lab_user }} /home/{{ lab_user }}/lab/key.txt && chmod 644 /home/{{ lab_user }}/lab/key.txt"
+
+    - name: Create lab readme
+      copy:
+        dest: "/home/{{ lab_user }}/lab/README.txt"
+        owner: "{{ lab_user }}"
+        group: "{{ lab_user }}"
+        mode: "0644"
+        content: |
+          Read the current flag from:
+          /home/{{ lab_user }}/lab/key.txt
+
+          The flag changes every 1 minute.
+          Submit the current flag in the training level.
+
+    - name: Allow password authentication for SSH if needed
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+      notify: Restart ssh
+
+    - name: Set password for lab user
+      user:
+        name: "{{ lab_user }}"
+        password: "{{ 'password' | password_hash('sha512') }}"
+
+  handlers:
+    - name: Restart ssh
+      systemd:
+        name: ssh
+        state: restarted
