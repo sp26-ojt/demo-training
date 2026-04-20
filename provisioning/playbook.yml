@@ -254,16 +254,3 @@
         enabled: yes
         state: started
 
-###############################################################################
-# localhost: generate training.json từ template + vars.yml
-###############################################################################
-- hosts: localhost
-  gather_facts: no
-  vars_files:
-    - vars.yml
-
-  tasks:
-    - name: Generate training.json from template
-      template:
-        src: training.json.j2
-        dest: ../training.json
