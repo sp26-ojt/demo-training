@@ -97,9 +97,16 @@
       copy:
         dest: /etc/sudoers.d/logwriter
         content: |
-          logwriter ALL=(ALL) NOPASSWD: /usr/bin/tee -a /var/log/mysql/error.log
-          logwriter ALL=(ALL) NOPASSWD: /bin/sed -i /var/log/mysql/error.log
+          logwriter ALL=(ALL) NOPASSWD: /usr/bin/tee
+          logwriter ALL=(ALL) NOPASSWD: /usr/bin/sed
         mode: "0440"
+
+    - name: Fix sed path symlink check
+      file:
+        path: /bin/sed
+        state: link
+        src: /usr/bin/sed
+      ignore_errors: yes
 
   handlers:
     - name: Restart ssh
