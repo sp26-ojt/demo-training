@@ -22,5 +22,5 @@ lab_password: "P@ssw0rd"
 
 # --- Network ---
 target_ip: "10.10.10.10"
-target_port: 22
+target_mysql_port: 3306
 target_log_user: "logwriter"

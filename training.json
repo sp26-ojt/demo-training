@@ -1,9 +1,9 @@
 {
   "title": "Bruteforce Log Analysis",
-  "description": "Một máy tấn công đang thực hiện bruteforce SSH vào server của bạn. Phân tích log để tìm flag ẩn trong đó.",
+  "description": "Một máy tấn công đang thực hiện bruteforce MySQL vào server của bạn. Phân tích log để tìm flag ẩn trong đó.",
   "prerequisites": [],
   "outcomes": [
-    "Đọc và phân tích SSH auth log",
+    "Đọc và phân tích MySQL error log",
     "Lọc thông tin từ log có nhiều noise",
     "Submit dynamic flag trước khi nó thay đổi"
   ],
@@ -28,16 +28,16 @@
       "title": "Phát hiện tấn công",
       "order": 1,
       "estimated_duration": 3,
-      "content": "Hệ thống đang bị tấn công bruteforce SSH từ IP **10.10.10.20**.\n\nKiểm tra log xác thực của hệ thống:\n```\n/var/log/auth.log\n```\n\nFlag được ẩn trong log dưới dạng một username đặc biệt mà kẻ tấn công đã thử. Tìm dòng log có chứa `FLAG{...}`."
+      "content": "Hệ thống đang bị tấn công bruteforce MySQL từ IP **10.10.10.20**.\n\nKiểm tra MySQL error log:\n```\n/var/log/mysql/error.log\n```\n\nFlag được ẩn trong log dưới dạng một username đặc biệt mà kẻ tấn công đã thử. Tìm dòng log có chứa `FLAG{...}`."
     },
     {
       "level_type": "TRAINING_LEVEL",
       "title": "Tìm flag trong log",
       "order": 2,
       "estimated_duration": 10,
-      "content": "Phân tích `/var/log/auth.log` để tìm flag ẩn trong các failed login attempt từ **10.10.10.20**.\n\nGợi ý: flag có format `FLAG{...}` và xuất hiện như một username trong log.",
+      "content": "Phân tích `/var/log/mysql/error.log` để tìm flag ẩn trong các failed login attempt từ **10.10.10.20**.\n\nGợi ý: flag có format `FLAG{...}` và xuất hiện như một username trong log.",
       "answer": "FLAG{placeholder}",
-      "solution": "Chạy lệnh sau để tìm flag:\n```bash\ngrep 'FLAG{' /var/log/auth.log | tail -1 | grep -oP 'FLAG\\{[^}]+\\}'\n```",
+      "solution": "Chạy lệnh sau để tìm flag:\n```bash\ngrep 'FLAG{' /var/log/mysql/error.log | grep -oP 'FLAG\\{[^}]+\\}'\n```",
       "solution_penalized": true,
       "incorrect_answer_limit": 10,
       "max_score": 100,

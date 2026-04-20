@@ -1,5 +1,5 @@
 ###############################################################################
-# student-vm: SSH target bị bruteforce — không có file nào liên quan đến flag
+# student-vm: chạy MySQL — bị bruteforce, thí sinh đọc MySQL error log tìm flag
 ###############################################################################
 - hosts: student-vm
   become: yes
@@ -10,8 +10,9 @@
     - name: Install required packages
       apt:
         name:
-          - openssh-server
+          - mysql-server
           - rsyslog
+          - openssh-server
         update_cache: yes
 
     - name: Ensure services are started
@@ -20,8 +21,9 @@
         enabled: yes
         state: started
       loop:
-        - ssh
+        - mysql
         - rsyslog
+        - ssh
 
     - name: Allow password authentication for SSH
       lineinfile:
@@ -30,6 +32,28 @@
         line: 'PasswordAuthentication yes'
       notify: Restart ssh
 
+    # Bật MySQL error log và general log để ghi lại failed auth
+    - name: Configure MySQL logging
+      copy:
+        dest: /etc/mysql/mysql.conf.d/logging.cnf
+        content: |
+          [mysqld]
+          # Log failed authentication attempts
+          log_error = /var/log/mysql/error.log
+          log_error_verbosity = 3
+          # Bind to all interfaces so attacker-vm can connect
+          bind-address = 0.0.0.0
+        mode: "0644"
+      notify: Restart mysql
+
+    - name: Ensure MySQL log directory exists
+      file:
+        path: /var/log/mysql
+        state: directory
+        owner: mysql
+        group: mysql
+        mode: "0750"
+
     - name: Create lab user
       user:
         name: "{{ lab_user }}"
@@ -37,13 +61,14 @@
         create_home: yes
         password: "{{ lab_password | password_hash('sha512') }}"
 
-    - name: Add lab user to adm group (read auth.log)
+    - name: Add lab user to mysql group (read error.log)
       user:
         name: "{{ lab_user }}"
-        groups: adm
+        groups: mysql
         append: yes
 
-    - name: Create logwriter user for attacker
+    # logwriter user: SSH vào để inject flag vào MySQL error log
+    - name: Create logwriter user
       user:
         name: "logwriter"
         shell: /usr/sbin/nologin
@@ -65,12 +90,12 @@
         group: logwriter
         mode: "0600"
 
-    - name: Allow logwriter to run logger and sed via sudo
+    - name: Allow logwriter to write MySQL error log via sudo
       copy:
         dest: /etc/sudoers.d/logwriter
         content: |
-          logwriter ALL=(ALL) NOPASSWD: /usr/bin/logger
-          logwriter ALL=(ALL) NOPASSWD: /usr/bin/sed
+          logwriter ALL=(ALL) NOPASSWD: /usr/bin/tee -a /var/log/mysql/error.log
+          logwriter ALL=(ALL) NOPASSWD: /bin/sed -i /var/log/mysql/error.log
         mode: "0440"
 
   handlers:
@@ -79,8 +104,13 @@
         name: ssh
         state: restarted
 
+    - name: Restart mysql
+      systemd:
+        name: mysql
+        state: restarted
+
 ###############################################################################
-# attacker-vm: toàn bộ logic flag nằm ở đây
+# attacker-vm: bruteforce MySQL + inject flag vào MySQL error log
 ###############################################################################
 - hosts: attacker-vm
   become: yes
@@ -92,6 +122,8 @@
       apt:
         name:
           - python3
+          - python3-pymysql
+          - default-mysql-client
           - openssh-client
           - cron
         update_cache: yes
@@ -132,6 +164,12 @@
         group: root
         content: |
           #!/usr/bin/env python3
+          """
+          Runs on attacker-vm.
+          Computes current dynamic flag then SSHes into student-vm and
+          appends it to /var/log/mysql/error.log disguised as a MySQL
+          Access denied entry.
+          """
           import hmac, hashlib, time, subprocess
 
           SECRET = "{{ dynamic_flag_secret }}"
@@ -148,13 +186,16 @@
               return "FLAG{" + digest + "}"
 
           def inject(flag):
-              msg = (
-                  f"sshd[1337]: Failed password for invalid user {flag} "
-                  f"from {TARGET} port 54321 ssh2"
+              ts = time.strftime("%Y-%m-%dT%H:%M:%S.000000Z")
+              # Trông giống MySQL Access denied log entry thật
+              line = (
+                  f"{ts} 0 [Note] [MY-010926] [Server] "
+                  f"Access denied for user '{flag}'@'{{ target_ip }}' "
+                  f"(using password: YES)"
               )
               remote_cmd = (
-                  f"sudo sed -i '/FLAG{{/d' /var/log/auth.log && "
-                  f"sudo logger -p auth.warning -t sshd '{msg}'"
+                  f"sudo sed -i '/FLAG{{/d' /var/log/mysql/error.log && "
+                  f"echo '{line}' | sudo tee -a /var/log/mysql/error.log > /dev/null"
               )
               subprocess.run([
                   "ssh", "-i", SSH_KEY,
@@ -174,69 +215,83 @@
     - name: Schedule dynamic flag injection every minute
       when: enable_dynamic_flag
       cron:
-        name: "Inject dynamic flag into student-vm auth.log"
+        name: "Inject dynamic flag into student-vm mysql error.log"
         minute: "*"
         job: "python3 /usr/local/bin/inject_flag.py"
 
     # -------------------------------------------------------------------------
     # STATIC FLAG MODE
     # -------------------------------------------------------------------------
-    - name: Inject static flag into student-vm auth.log (once)
+    - name: Inject static flag into student-vm mysql error.log (once)
       when: not enable_dynamic_flag
       delegate_to: student-vm
       become: yes
       shell: |
-        sed -i '/FLAG{/d' /var/log/auth.log
-        logger -p auth.warning -t sshd \
-          "sshd[1337]: Failed password for invalid user {{ static_flag }} from {{ target_ip }} port 54321 ssh2"
+        ts=$(date -u +"%Y-%m-%dT%H:%M:%S.000000Z")
+        sed -i '/FLAG{/d' /var/log/mysql/error.log
+        echo "${ts} 0 [Note] [MY-010926] [Server] Access denied for user '{{ static_flag }}'@'{{ target_ip }}' (using password: YES)" \
+          >> /var/log/mysql/error.log
 
     - name: Remove dynamic flag cron if switching to static
       when: not enable_dynamic_flag
       cron:
-        name: "Inject dynamic flag into student-vm auth.log"
+        name: "Inject dynamic flag into student-vm mysql error.log"
         state: absent
 
     # -------------------------------------------------------------------------
-    # BRUTEFORCE NOISE (chạy bất kể dynamic hay static)
+    # BRUTEFORCE NOISE — thử login MySQL thật với username/password sai
     # -------------------------------------------------------------------------
-    - name: Deploy bruteforce simulator script
+    - name: Deploy MySQL bruteforce script
       copy:
         dest: /usr/local/bin/bruteforce.py
         mode: "0755"
         content: |
           #!/usr/bin/env python3
-          import socket, time, random, string
+          """
+          Continuously attempts MySQL logins with random credentials.
+          Each failed attempt generates a real 'Access denied' entry
+          in student-vm's /var/log/mysql/error.log.
+          """
+          import time, random, subprocess
 
           TARGET = "{{ target_ip }}"
-          PORT = {{ target_port }}
+          PORT = {{ target_mysql_port }}
 
-          WORDLIST = [
-              "admin", "root", "test", "guest", "user", "ubuntu", "pi",
-              "oracle", "postgres", "mysql", "ftp", "mail", "www", "web",
-              "deploy", "jenkins", "git", "ansible", "vagrant", "hadoop",
-              "tomcat", "nginx", "apache", "backup", "support", "info",
+          USERNAMES = [
+              "admin", "root", "dbadmin", "mysql", "test", "guest",
+              "backup", "deploy", "app", "webapp", "api", "monitor",
           ]
 
-          def attempt(username):
-              try:
-                  with socket.create_connection((TARGET, PORT), timeout=3) as s:
-                      s.recv(256)
-                      s.sendall(b"SSH-2.0-BruteBot_1.0\r\n")
-                      time.sleep(0.5)
-              except Exception:
-                  pass
+          PASSWORDS = [
+              "password", "123456", "admin", "root", "toor",
+              "letmein", "qwerty", "abc123", "pass", "secret",
+          ]
+
+          def attempt(user, password):
+              # mysql client trả về exit code != 0 khi sai credentials
+              # sshd trên target log lại failed attempt thật
+              subprocess.run([
+                  "mysql",
+                  f"-h{TARGET}",
+                  f"-P{PORT}",
+                  f"-u{user}",
+                  f"-p{password}",
+                  "--connect-timeout=3",
+                  "-e", "SELECT 1",
+              ], capture_output=True)
 
           if __name__ == "__main__":
+              print(f"[*] Bruteforcing MySQL at {TARGET}:{PORT}")
               while True:
-                  attempt(random.choice(WORDLIST))
-                  time.sleep(random.uniform(0.3, 1.0))
+                  attempt(random.choice(USERNAMES), random.choice(PASSWORDS))
+                  time.sleep(random.uniform(0.5, 1.5))
 
     - name: Create bruteforce systemd service
       copy:
         dest: /etc/systemd/system/bruteforce.service
         content: |
           [Unit]
-          Description=SSH Bruteforce Simulator
+          Description=MySQL Bruteforce Simulator
           After=network.target
 
           [Service]
@@ -253,4 +308,3 @@
         daemon_reload: yes
         enabled: yes
         state: started
-
