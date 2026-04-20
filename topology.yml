@@ -1,0 +1,32 @@
+name: linear-test
+
+hosts:
+  - name: student-vm
+    base_box:
+      image: debian-12-x86_64
+    flavor: standard.small
+
+routers:
+  - name: lab-router
+    base_box:
+      image: debian-12-x86_64
+    flavor: standard.small
+
+networks:
+  - name: student-net
+    cidr: 10.10.10.0/24
+
+net_mappings:
+  - host: student-vm
+    network: student-net
+    ip: 10.10.10.10
+
+router_mappings:
+  - router: lab-router
+    network: student-net
+    ip: 10.10.10.1
+
+groups:
+  - name: user-accessible
+    nodes:
+      - student-vm
