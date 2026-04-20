@@ -35,7 +35,7 @@
     # Bật MySQL error log và general log để ghi lại failed auth
     - name: Configure MySQL logging
       copy:
-        dest: /etc/mysql/mysql.conf.d/logging.cnf
+        dest: /etc/mysql/mariadb.conf.d/logging.cnf
         content: |
           [mysqld]
           # Log failed authentication attempts
