@@ -16,8 +16,8 @@
       "title": "Truy cập vào server",
       "order": 0,
       "estimated_duration": 2,
-      "local_content": "Dùng SSH để kết nối vào student-vm:\n- **Username:** `user`\n- **Password:** `P@ssw0rd2024`\n\nPasskey: next",
-      "cloud_content": "Dùng SSH config được cung cấp để kết nối vào student-vm:\n- **Username:** `user`\n- **Password:** `P@ssw0rd2024`\n\nPasskey: next",
+      "local_content": "Dùng SSH để kết nối vào student-vm:\n- **Username:** `user`\n- **Password:** `P@ssw0rd`\n\nPasskey: next",
+      "cloud_content": "Dùng SSH config được cung cấp để kết nối vào student-vm:\n- **Username:** `user`\n- **Password:** `P@ssw0rd`\n\nPasskey: next",
       "passkey": "next"
     },
     {
