@@ -16,8 +16,8 @@
       "title": "Truy cập vào server",
       "order": 0,
       "estimated_duration": 2,
-      "local_content": "Dùng SSH để kết nối vào student-vm:\n- **Username:** `user`\n- **Password:** `P@ssw0rd`\n\nPasskey: next",
-      "cloud_content": "Dùng SSH config được cung cấp để kết nối vào student-vm:\n- **Username:** `user`\n- **Password:** `P@ssw0rd`\n\nPasskey: next",
+      "local_content": "Dùng SSH để kết nối vào student-vm.\n\nPasskey: next",
+      "cloud_content": "Dùng SSH config được cung cấp để kết nối vào student-vm.\n\nPasskey: next",
       "passkey": "next"
     },
     {
@@ -32,7 +32,7 @@
       "title": "Tìm flag trong log",
       "order": 2,
       "estimated_duration": 10,
-      "content": "Phân tích `/var/log/mysql/audit.log` để tìm flag ẩn trong các failed login attempt từ **10.10.10.20**.\n\nGợi ý: flag có format `FLAG{...}` và xuất hiện như một username trong log.",
+      "content": "Phân tích `/var/log/mysql/audit.log` để tìm flag ẩn trong các failed login attempt từ **10.10.10.20**.\n\nThông tin SSH vào server:\n- **Username:** `user`\n- **Password:** `P@ssw0rd`\n\nGợi ý: flag có format `FLAG{...}` và xuất hiện như một username trong log.",
       "answer": "FLAG{placeholder}",
       "solution": "Chạy lệnh sau để tìm flag:\n```bash\ngrep -oP 'FLAG\\{[^}]+\\}' /var/log/mysql/audit.log\n```",
       "solution_penalized": true,
