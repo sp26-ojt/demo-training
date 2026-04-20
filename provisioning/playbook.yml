@@ -33,17 +33,20 @@
       notify: Restart ssh
 
     # Bật MySQL error log và general log để ghi lại failed auth
-    - name: Configure MySQL logging
+    - name: Configure MariaDB logging and bind address
       copy:
         dest: /etc/mysql/mariadb.conf.d/logging.cnf
         content: |
           [mysqld]
-          # Log failed authentication attempts
           log_error = /var/log/mysql/error.log
-          log_error_verbosity = 3
-          # Bind to all interfaces so attacker-vm can connect
-          bind-address = 0.0.0.0
         mode: "0644"
+      notify: Restart mysql
+
+    - name: Allow MariaDB to bind on all interfaces
+      lineinfile:
+        path: /etc/mysql/mariadb.conf.d/50-server.cnf
+        regexp: '^bind-address\s*='
+        line: 'bind-address = 0.0.0.0'
       notify: Restart mysql
 
     - name: Ensure MySQL log directory exists
