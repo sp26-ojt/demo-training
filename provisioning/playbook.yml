@@ -167,12 +167,6 @@
         group: root
         content: |
           #!/usr/bin/env python3
-          """
-          Runs on attacker-vm.
-          Computes current dynamic flag then SSHes into student-vm and
-          appends it to /var/log/mysql/error.log disguised as a MySQL
-          Access denied entry.
-          """
           import hmac, hashlib, time, subprocess
 
           SECRET = "{{ dynamic_flag_secret }}"
@@ -180,7 +174,7 @@
           TARGET = "{{ target_ip }}"
           LOG_USER = "{{ target_log_user }}"
           SSH_KEY = "/root/.ssh/attacker_id_ed25519"
-
+          {% raw %}
           def generate_flag():
               slot = int(time.time()) // (INTERVAL * 60)
               digest = hmac.new(
@@ -190,14 +184,13 @@
 
           def inject(flag):
               ts = time.strftime("%Y-%m-%dT%H:%M:%S.000000Z")
-              # Trông giống MySQL Access denied log entry thật
               line = (
                   f"{ts} 0 [Note] [MY-010926] [Server] "
-                  f"Access denied for user '{flag}'@'{{ target_ip }}' "
+                  f"Access denied for user '{flag}'@'{TARGET}' "
                   f"(using password: YES)"
               )
               remote_cmd = (
-                  f"sudo sed -i '/FLAG{{/d' /var/log/mysql/error.log && "
+                  "sudo sed -i '/FLAG{/d' /var/log/mysql/error.log && "
                   f"echo '{line}' | sudo tee -a /var/log/mysql/error.log > /dev/null"
               )
               subprocess.run([
@@ -210,6 +203,7 @@
 
           if __name__ == "__main__":
               inject(generate_flag())
+          {% endraw %}
 
     - name: Run initial dynamic flag injection
       when: enable_dynamic_flag
@@ -250,16 +244,11 @@
         mode: "0755"
         content: |
           #!/usr/bin/env python3
-          """
-          Continuously attempts MySQL logins with random credentials.
-          Each failed attempt generates a real 'Access denied' entry
-          in student-vm's /var/log/mysql/error.log.
-          """
           import time, random, subprocess
 
           TARGET = "{{ target_ip }}"
           PORT = {{ target_mysql_port }}
-
+          {% raw %}
           USERNAMES = [
               "admin", "root", "dbadmin", "mysql", "test", "guest",
               "backup", "deploy", "app", "webapp", "api", "monitor",
@@ -271,8 +260,6 @@
           ]
 
           def attempt(user, password):
-              # mysql client trả về exit code != 0 khi sai credentials
-              # sshd trên target log lại failed attempt thật
               subprocess.run([
                   "mysql",
                   f"-h{TARGET}",
@@ -288,6 +275,7 @@
               while True:
                   attempt(random.choice(USERNAMES), random.choice(PASSWORDS))
                   time.sleep(random.uniform(0.5, 1.5))
+          {% endraw %}
 
     - name: Create bruteforce systemd service
       copy:
