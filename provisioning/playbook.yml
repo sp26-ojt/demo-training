@@ -10,7 +10,7 @@
     - name: Install required packages
       apt:
         name:
-          - mysql-server
+          - default-mysql-server
           - rsyslog
           - openssh-server
         update_cache: yes
