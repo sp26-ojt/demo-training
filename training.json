@@ -10,9 +10,6 @@
   "state": "UNRELEASED",
   "estimated_duration": 20,
   "variant_sandboxes": false,
-  "enable_dynamic_flag": true,
-  "flag_change_interval": 1,
-  "initial_secret": "sp26",
   "levels": [
     {
       "level_type": "ACCESS_LEVEL",
