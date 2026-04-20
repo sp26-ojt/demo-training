@@ -1,128 +1,269 @@
+###############################################################################
+# student-vm: SSH target bị bruteforce — không có file nào liên quan đến flag
+###############################################################################
 - hosts: student-vm
   become: yes
-  vars:
-    dynamic_flag_secret: "sp26"
-    dynamic_flag_interval_minutes: 1
-    lab_user: "user"
+  vars_files:
+    - vars.yml
 
   tasks:
     - name: Install required packages
       apt:
         name:
-          - python3
-          - curl
           - openssh-server
-          - cron
+          - rsyslog
         update_cache: yes
 
-    - name: Ensure SSH service is enabled
+    - name: Ensure services are started
       systemd:
-        name: ssh
+        name: "{{ item }}"
         enabled: yes
         state: started
+      loop:
+        - ssh
+        - rsyslog
 
-    - name: Ensure cron service is enabled
-      systemd:
-        name: cron
-        enabled: yes
-        state: started
-
-    - name: Create lab user
-      user:
-        name: "{{ lab_user }}"
-        shell: /bin/bash
-        create_home: yes
-
-    - name: Create .ssh directory
-      file:
-        path: "/home/{{ lab_user }}/.ssh"
-        state: directory
-        owner: "{{ lab_user }}"
-        group: "{{ lab_user }}"
-        mode: "0700"
-
-    - name: Create lab directory
-      file:
-        path: "/home/{{ lab_user }}/lab"
-        state: directory
-        owner: "{{ lab_user }}"
-        group: "{{ lab_user }}"
-        mode: "0755"
-
-    - name: Create local dynamic flag generator
-      copy:
-        dest: /usr/local/bin/update_flag.py
-        mode: "0755"
-        content: |
-          #!/usr/bin/env python3
-          import hmac
-          import hashlib
-          import time
-          from pathlib import Path
-
-          SECRET = "{{ dynamic_flag_secret }}"
-          INTERVAL_MINUTES = {{ dynamic_flag_interval_minutes }}
-
-          def generate_flag():
-              slot = int(time.time()) // (INTERVAL_MINUTES * 60)
-              digest = hmac.new(
-                  SECRET.encode(),
-                  str(slot).encode(),
-                  hashlib.sha256
-              ).hexdigest()[:16]
-              return "FLAG{" + digest + "}"
-
-          def main():
-              flag = generate_flag()
-              path = Path("/home/{{ lab_user }}/lab/key.txt")
-              path.write_text(flag + "\n", encoding="utf-8")
-
-          if __name__ == "__main__":
-              main()
-
-    - name: Run initial flag update
-      command: python3 /usr/local/bin/update_flag.py
-
-    - name: Fix ownership of generated files
-      file:
-        path: "/home/{{ lab_user }}/lab/key.txt"
-        owner: "{{ lab_user }}"
-        group: "{{ lab_user }}"
-        mode: "0644"
-
-    - name: Update flag every minute
-      cron:
-        name: "Update Dynamic Lab Flag"
-        minute: "*"
-        job: "python3 /usr/local/bin/update_flag.py && chown {{ lab_user }}:{{ lab_user }} /home/{{ lab_user }}/lab/key.txt && chmod 644 /home/{{ lab_user }}/lab/key.txt"
-
-    - name: Create lab readme
-      copy:
-        dest: "/home/{{ lab_user }}/lab/README.txt"
-        owner: "{{ lab_user }}"
-        group: "{{ lab_user }}"
-        mode: "0644"
-        content: |
-          Read the current flag from:
-          /home/{{ lab_user }}/lab/key.txt
-
-          The flag changes every 1 minute.
-          Submit the current flag in the training level.
-
-    - name: Allow password authentication for SSH if needed
+    - name: Allow password authentication for SSH
       lineinfile:
         path: /etc/ssh/sshd_config
         regexp: '^#?PasswordAuthentication'
         line: 'PasswordAuthentication yes'
       notify: Restart ssh
 
-    - name: Set password for lab user
+    - name: Create lab user
       user:
         name: "{{ lab_user }}"
-        password: "{{ 'password' | password_hash('sha512') }}"
+        shell: /bin/bash
+        create_home: yes
+        password: "{{ lab_password | password_hash('sha512') }}"
+
+    - name: Add lab user to adm group (read auth.log)
+      user:
+        name: "{{ lab_user }}"
+        groups: adm
+        append: yes
+
+    - name: Create logwriter user for attacker
+      user:
+        name: "logwriter"
+        shell: /usr/sbin/nologin
+        create_home: yes
+
+    - name: Create .ssh directory for logwriter
+      file:
+        path: /home/logwriter/.ssh
+        state: directory
+        owner: logwriter
+        group: logwriter
+        mode: "0700"
+
+    - name: Initialize authorized_keys for logwriter
+      copy:
+        dest: /home/logwriter/.ssh/authorized_keys
+        content: ""
+        owner: logwriter
+        group: logwriter
+        mode: "0600"
+
+    - name: Allow logwriter to run logger and sed via sudo
+      copy:
+        dest: /etc/sudoers.d/logwriter
+        content: |
+          logwriter ALL=(ALL) NOPASSWD: /usr/bin/logger
+          logwriter ALL=(ALL) NOPASSWD: /usr/bin/sed
+        mode: "0440"
 
   handlers:
     - name: Restart ssh
       systemd:
         name: ssh
         state: restarted
+
+###############################################################################
+# attacker-vm: toàn bộ logic flag nằm ở đây
+###############################################################################
+- hosts: attacker-vm
+  become: yes
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - python3
+          - openssh-client
+          - cron
+        update_cache: yes
+
+    - name: Ensure cron is started
+      systemd:
+        name: cron
+        enabled: yes
+        state: started
+
+    - name: Generate SSH keypair for attacker
+      openssh_keypair:
+        path: /root/.ssh/attacker_id_ed25519
+        type: ed25519
+        force: no
+
+    - name: Read attacker public key
+      slurp:
+        src: /root/.ssh/attacker_id_ed25519.pub
+      register: attacker_pubkey
+
+    - name: Authorize attacker key on student-vm logwriter user
+      delegate_to: student-vm
+      authorized_key:
+        user: logwriter
+        key: "{{ attacker_pubkey.content | b64decode | trim }}"
+        state: present
+
+    # -------------------------------------------------------------------------
+    # DYNAMIC FLAG MODE
+    # -------------------------------------------------------------------------
+    - name: Deploy dynamic flag injector script
+      when: enable_dynamic_flag
+      copy:
+        dest: /usr/local/bin/inject_flag.py
+        mode: "0700"
+        owner: root
+        group: root
+        content: |
+          #!/usr/bin/env python3
+          import hmac, hashlib, time, subprocess
+
+          SECRET = "{{ dynamic_flag_secret }}"
+          INTERVAL = {{ dynamic_flag_interval_minutes }}
+          TARGET = "{{ target_ip }}"
+          LOG_USER = "{{ target_log_user }}"
+          SSH_KEY = "/root/.ssh/attacker_id_ed25519"
+
+          def generate_flag():
+              slot = int(time.time()) // (INTERVAL * 60)
+              digest = hmac.new(
+                  SECRET.encode(), str(slot).encode(), hashlib.sha256
+              ).hexdigest()[:16]
+              return "FLAG{" + digest + "}"
+
+          def inject(flag):
+              msg = (
+                  f"sshd[1337]: Failed password for invalid user {flag} "
+                  f"from {TARGET} port 54321 ssh2"
+              )
+              remote_cmd = (
+                  f"sudo sed -i '/FLAG{{/d' /var/log/auth.log && "
+                  f"sudo logger -p auth.warning -t sshd '{msg}'"
+              )
+              subprocess.run([
+                  "ssh", "-i", SSH_KEY,
+                  "-o", "StrictHostKeyChecking=no",
+                  "-o", "BatchMode=yes",
+                  f"{LOG_USER}@{TARGET}",
+                  remote_cmd,
+              ], check=True)
+
+          if __name__ == "__main__":
+              inject(generate_flag())
+
+    - name: Run initial dynamic flag injection
+      when: enable_dynamic_flag
+      command: python3 /usr/local/bin/inject_flag.py
+
+    - name: Schedule dynamic flag injection every minute
+      when: enable_dynamic_flag
+      cron:
+        name: "Inject dynamic flag into student-vm auth.log"
+        minute: "*"
+        job: "python3 /usr/local/bin/inject_flag.py"
+
+    # -------------------------------------------------------------------------
+    # STATIC FLAG MODE
+    # -------------------------------------------------------------------------
+    - name: Inject static flag into student-vm auth.log (once)
+      when: not enable_dynamic_flag
+      delegate_to: student-vm
+      become: yes
+      shell: |
+        sed -i '/FLAG{/d' /var/log/auth.log
+        logger -p auth.warning -t sshd \
+          "sshd[1337]: Failed password for invalid user {{ static_flag }} from {{ target_ip }} port 54321 ssh2"
+
+    - name: Remove dynamic flag cron if switching to static
+      when: not enable_dynamic_flag
+      cron:
+        name: "Inject dynamic flag into student-vm auth.log"
+        state: absent
+
+    # -------------------------------------------------------------------------
+    # BRUTEFORCE NOISE (chạy bất kể dynamic hay static)
+    # -------------------------------------------------------------------------
+    - name: Deploy bruteforce simulator script
+      copy:
+        dest: /usr/local/bin/bruteforce.py
+        mode: "0755"
+        content: |
+          #!/usr/bin/env python3
+          import socket, time, random, string
+
+          TARGET = "{{ target_ip }}"
+          PORT = {{ target_port }}
+
+          WORDLIST = [
+              "admin", "root", "test", "guest", "user", "ubuntu", "pi",
+              "oracle", "postgres", "mysql", "ftp", "mail", "www", "web",
+              "deploy", "jenkins", "git", "ansible", "vagrant", "hadoop",
+              "tomcat", "nginx", "apache", "backup", "support", "info",
+          ]
+
+          def attempt(username):
+              try:
+                  with socket.create_connection((TARGET, PORT), timeout=3) as s:
+                      s.recv(256)
+                      s.sendall(b"SSH-2.0-BruteBot_1.0\r\n")
+                      time.sleep(0.5)
+              except Exception:
+                  pass
+
+          if __name__ == "__main__":
+              while True:
+                  attempt(random.choice(WORDLIST))
+                  time.sleep(random.uniform(0.3, 1.0))
+
+    - name: Create bruteforce systemd service
+      copy:
+        dest: /etc/systemd/system/bruteforce.service
+        content: |
+          [Unit]
+          Description=SSH Bruteforce Simulator
+          After=network.target
+
+          [Service]
+          ExecStart=/usr/bin/python3 /usr/local/bin/bruteforce.py
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable and start bruteforce service
+      systemd:
+        name: bruteforce
+        daemon_reload: yes
+        enabled: yes
+        state: started
+
+###############################################################################
+# localhost: generate training.json từ template + vars.yml
+###############################################################################
+- hosts: localhost
+  gather_facts: no
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Generate training.json from template
+      template:
+        src: training.json.j2
+        dest: ../training.json

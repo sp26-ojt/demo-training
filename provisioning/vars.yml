@@ -1,0 +1,26 @@
+---
+# =============================================================================
+# CẤU HÌNH CHÍNH — chỉnh sửa tại đây
+# =============================================================================
+
+# --- Dynamic flag ---
+# Đặt false để dùng static flag, true để bật dynamic flag
+enable_dynamic_flag: true
+
+# Dùng khi enable_dynamic_flag: true
+# Phải khớp với initial_secret và flag_change_interval trong training definition
+dynamic_flag_secret: "sp26"
+dynamic_flag_interval_minutes: 1
+
+# Dùng khi enable_dynamic_flag: false
+# Điền flag cố định muốn dùng vào đây
+static_flag: "FLAG{my_static_flag}"
+
+# --- Lab user ---
+lab_user: "user"
+lab_password: "P@ssw0rd"
+
+# --- Network ---
+target_ip: "10.10.10.10"
+target_port: 22
+target_log_user: "logwriter"

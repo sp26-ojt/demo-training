@@ -1,40 +1,44 @@
 {
-  "title": "Dynamic Flag Lab",
-  "description": "Connect to the sandbox via SSH, read the current dynamic flag from the VM, and submit it.",
+  "title": "Bruteforce Log Analysis",
+  "description": "Một máy tấn công đang thực hiện bruteforce SSH vào server của bạn. Phân tích log để tìm flag ẩn trong đó.",
   "prerequisites": [],
   "outcomes": [
-    "Read a changing flag from a sandboxed host",
-    "Submit the current flag before it rotates"
+    "Đọc và phân tích SSH auth log",
+    "Lọc thông tin từ log có nhiều noise",
+    "Submit dynamic flag trước khi nó thay đổi"
   ],
   "state": "UNRELEASED",
-  "estimated_duration": 15,
+  "estimated_duration": 20,
   "variant_sandboxes": false,
+  "enable_dynamic_flag": true,
+  "flag_change_interval": 1,
+  "initial_secret": "sp26",
   "levels": [
     {
       "level_type": "ACCESS_LEVEL",
-      "title": "Access The VM",
+      "title": "Truy cập vào server",
       "order": 0,
       "estimated_duration": 2,
-      "local_content": "Use the provided SSH access to connect to the student VM as user `user`.\nPasskey:password",
-      "cloud_content": "Use the provided SSH access to connect to the student VM as user `user`.\nPasskwy:password",
-      "passkey": "password"
+      "local_content": "Dùng SSH để kết nối vào student-vm với user `user`.\nPasskey: P@ssw0rd2024",
+      "cloud_content": "Dùng SSH config được cung cấp để kết nối vào student-vm với user `user`.\nPasskey: P@ssw0rd2024",
+      "passkey": "P@ssw0rd2024"
     },
     {
       "level_type": "INFO_LEVEL",
-      "title": "Find The Flag",
+      "title": "Phát hiện tấn công",
       "order": 1,
-      "estimated_duration": 2,
-      "content": "After logging in, read the current flag from `/home/user/lab/key.txt`. The flag changes every 1 minute."
+      "estimated_duration": 3,
+      "content": "Hệ thống đang bị tấn công bruteforce SSH từ IP **10.10.10.20**.\n\nKiểm tra log xác thực của hệ thống:\n```\n/var/log/auth.log\n```\n\nFlag được ẩn trong log dưới dạng một username đặc biệt mà kẻ tấn công đã thử. Tìm dòng log có chứa `FLAG{...}`."
     },
     {
       "level_type": "TRAINING_LEVEL",
-      "title": "Submit Dynamic Flag",
+      "title": "Tìm flag trong log",
       "order": 2,
-      "estimated_duration": 5,
-      "content": "Submit the current flag from `/home/user/lab/key.txt`. The expected format is `FLAG{...}`.",
+      "estimated_duration": 10,
+      "content": "Phân tích `/var/log/auth.log` để tìm flag ẩn trong các failed login attempt từ **10.10.10.20**.\n\nGợi ý: flag có format `FLAG{...}` và xuất hiện như một username trong log.",
       "answer": "FLAG{placeholder}",
-      "solution": "SSH to the VM, read `/home/user/lab/key.txt`, and submit the current flag before it rotates.",
-      "solution_penalized": false,
+      "solution": "Chạy lệnh sau để tìm flag:\n```bash\ngrep 'FLAG{' /var/log/auth.log | tail -1 | grep -oP 'FLAG\\{[^}]+\\}'\n```",
+      "solution_penalized": true,
       "incorrect_answer_limit": 10,
       "max_score": 100,
       "variant_answers": false,

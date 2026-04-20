@@ -1,7 +1,12 @@
-name: linear-test
+name: bruteforce-demo
 
 hosts:
   - name: student-vm
+    base_box:
+      image: debian-12-x86_64
+    flavor: standard.small
+
+  - name: attacker-vm
     base_box:
       image: debian-12-x86_64
     flavor: standard.small
@@ -20,6 +25,10 @@ net_mappings:
   - host: student-vm
     network: student-net
     ip: 10.10.10.10
+
+  - host: attacker-vm
+    network: student-net
+    ip: 10.10.10.20
 
 router_mappings:
   - router: lab-router
