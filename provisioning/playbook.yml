@@ -76,6 +76,17 @@
         groups: mysql
         append: yes
 
+    # Tạo MySQL user giả để bruteforce attempt có thể bị log
+    # User này không có password đúng nên mọi attempt đều FAILED_CONNECT
+    - name: Create dummy MySQL user for bruteforce target
+      community.mysql.mysql_user:
+        login_unix_socket: /run/mysqld/mysqld.sock
+        name: "dbuser"
+        host: "%"
+        password: "s3cr3t_n0b0dy_kn0ws"
+        priv: "*.*:USAGE"
+        state: present
+
     # logwriter user: SSH vào để inject flag vào MySQL error log
     - name: Create logwriter user
       user:
@@ -194,13 +205,13 @@
               line = (
                   f"{ts},{TARGET},'{flag}',FAILED_CONNECT,,,1045"
               )
-              # Bước 1: xóa flag cũ
+              # Bước 1: xóa flag cũ — match đúng pattern trong audit log
               subprocess.run([
                   "ssh", "-i", SSH_KEY,
                   "-o", "StrictHostKeyChecking=no",
                   "-o", "BatchMode=yes",
                   f"{LOG_USER}@{TARGET}",
-                  "sudo sed -i '/FAILED_CONNECT.*FLAG{/d' /var/log/mysql/audit.log",
+                  "sudo sed -i \"/FLAG{/d\" /var/log/mysql/audit.log",
               ], check=True)
               # Bước 2: ghi flag mới qua stdin
               subprocess.run([
@@ -260,7 +271,7 @@
           PORT = {{ target_mysql_port }}
           {% raw %}
           USERNAMES = [
-              "admin", "root", "dbadmin", "mysql", "test", "guest",
+              "dbuser", "admin", "root", "dbadmin", "mysql", "test", "guest",
               "backup", "deploy", "app", "webapp", "api", "monitor",
               "developer", "ubuntu", "postgres", "oracle", "sa", "dba",
               "readonly", "replication", "nagios", "zabbix", "prometheus",
