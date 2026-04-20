@@ -74,7 +74,7 @@
     - name: Create logwriter user
       user:
         name: "logwriter"
-        shell: /usr/sbin/nologin
+        shell: /bin/bash
         create_home: yes
 
     - name: Create .ssh directory for logwriter
@@ -189,17 +189,22 @@
                   f"Access denied for user '{flag}'@'{TARGET}' "
                   f"(using password: YES)"
               )
-              remote_cmd = (
-                  "sudo sed -i '/FLAG{/d' /var/log/mysql/error.log && "
-                  f"echo '{line}' | sudo tee -a /var/log/mysql/error.log > /dev/null"
-              )
+              # Bước 1: xóa flag cũ
               subprocess.run([
                   "ssh", "-i", SSH_KEY,
                   "-o", "StrictHostKeyChecking=no",
                   "-o", "BatchMode=yes",
                   f"{LOG_USER}@{TARGET}",
-                  remote_cmd,
+                  "sudo sed -i '/FLAG{/d' /var/log/mysql/error.log",
               ], check=True)
+              # Bước 2: ghi flag mới qua stdin — tránh hoàn toàn vấn đề quoting
+              subprocess.run([
+                  "ssh", "-i", SSH_KEY,
+                  "-o", "StrictHostKeyChecking=no",
+                  "-o", "BatchMode=yes",
+                  f"{LOG_USER}@{TARGET}",
+                  "sudo tee -a /var/log/mysql/error.log > /dev/null",
+              ], input=line.encode() + b"\n", check=True)
 
           if __name__ == "__main__":
               inject(generate_flag())
