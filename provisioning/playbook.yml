@@ -116,6 +116,7 @@
         content: |
           logwriter ALL=(ALL) NOPASSWD: /usr/bin/tee
           logwriter ALL=(ALL) NOPASSWD: /usr/bin/sed
+          logwriter ALL=(ALL) NOPASSWD: /bin/sh
         mode: "0440"
 
   handlers:
@@ -203,12 +204,18 @@
           def inject(flag):
               ts = time.strftime("%Y%m%d %H:%M:%S")
               line = f"{ts},10.10.10.20,'{flag}',FAILED_CONNECT,,,1045"
+              # Dùng grep -v để lọc flag cũ rồi ghi lại vào file gốc (giữ inode)
+              # tránh audit plugin mất file handle
+              remove_cmd = (
+                  "sudo sh -c 'grep -v \"FLAG{\" /var/log/mysql/audit.log "
+                  "> /tmp/audit_tmp && cat /tmp/audit_tmp > /var/log/mysql/audit.log'"
+              )
               subprocess.run([
                   "ssh", "-i", SSH_KEY,
                   "-o", "StrictHostKeyChecking=no",
                   "-o", "BatchMode=yes",
                   f"{LOG_USER}@{TARGET}",
-                  "sudo sed -i \"/FLAG{/d\" /var/log/mysql/audit.log",
+                  remove_cmd,
               ], check=True)
               subprocess.run([
                   "ssh", "-i", SSH_KEY,
