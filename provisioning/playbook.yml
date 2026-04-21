@@ -204,7 +204,7 @@
               ts = time.strftime("%Y-%m-%d %H:%M:%S")
               line = (
                   f"{ts} 0 [Warning] Access denied for user "
-                  f"'{flag}'@'{ATTACKER}' (using password: YES)"
+                  f"'{flag}'@'10.10.10.20' (using password: YES)"
               )
               subprocess.run([
                   "ssh", "-i", SSH_KEY,
@@ -220,7 +220,6 @@
                   f"{LOG_USER}@{TARGET}",
                   "sudo tee -a /var/log/mysql/error.log > /dev/null",
               ], input=line.encode() + b"\n", check=True)
-
           if __name__ == "__main__":
               inject(generate_flag())
           {% endraw %}
