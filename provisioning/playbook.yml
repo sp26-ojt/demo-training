@@ -71,6 +71,13 @@
         groups: mysql
         append: yes
 
+    # Tạo MySQL user cho phép remote connect — bruteforce sẽ thử sai password
+    # và MariaDB sẽ log Access denied vào error.log
+    - name: Create remote MySQL user for bruteforce target
+      shell: |
+        mysql -u root -S /run/mysqld/mysqld.sock -e \
+          "CREATE USER IF NOT EXISTS 'dbuser'@'%' IDENTIFIED BY 'Xk9#mP2qL7nR'; FLUSH PRIVILEGES;"
+
     # logwriter user: SSH vào để inject flag vào MySQL error log
     - name: Create logwriter user
       user:
@@ -257,10 +264,7 @@
           PORT = {{ target_mysql_port }}
           {% raw %}
           USERNAMES = [
-              "dbuser", "admin", "root", "dbadmin", "mysql", "test", "guest",
-              "backup", "deploy", "app", "webapp", "api", "monitor",
-              "developer", "ubuntu", "postgres", "oracle", "sa", "dba",
-              "readonly", "replication", "nagios", "zabbix", "prometheus",
+              "dbuser",
           ]
 
           PASSWORDS = [
