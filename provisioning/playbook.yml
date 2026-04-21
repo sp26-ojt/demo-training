@@ -76,6 +76,10 @@
         groups: mysql
         append: yes
 
+    # Flush handlers trước để đảm bảo MySQL đã restart xong trước khi tạo user
+    - name: Flush handlers
+      meta: flush_handlers
+
     # Tạo MySQL user cho phép remote connect — bruteforce sẽ thử sai password
     # và MariaDB sẽ log Access denied vào error.log
     - name: Create remote MySQL user for bruteforce target
@@ -316,6 +320,19 @@
         daemon_reload: yes
         enabled: yes
         state: started
+
+    # Đợi student-vm sẵn sàng trước khi bruteforce bắt đầu
+    - name: Wait for MySQL on student-vm to be ready
+      wait_for:
+        host: "{{ target_ip }}"
+        port: "{{ target_mysql_port }}"
+        timeout: 60
+        delay: 5
+
+    - name: Restart bruteforce after student-vm is ready
+      systemd:
+        name: bruteforce
+        state: restarted
 
     - name: Check bruteforce service status
       command: systemctl status bruteforce
