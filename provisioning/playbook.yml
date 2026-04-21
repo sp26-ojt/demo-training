@@ -40,6 +40,11 @@
           [mysqld]
           log_error = /var/log/mysql/error.log
           log_warnings = 9
+          plugin_load_add = server_audit
+          server_audit_logging = ON
+          server_audit_file_path = /var/log/mysql/audit.log
+          server_audit_events = CONNECT
+          server_audit_excl_users = root
         mode: "0644"
       notify: Restart mysql
 
@@ -332,3 +337,11 @@
     - name: Print bruteforce logs
       debug:
         msg: "{{ bruteforce_logs.stdout }}"
+
+    - name: Test MySQL connection from attacker-vm
+      shell: mysql -h{{ target_ip }} -P{{ target_mysql_port }} -udbuser -pwrongpass --connect-timeout=3 -e "SELECT 1" 2>&1 || true
+      register: mysql_test
+
+    - name: Print MySQL test result
+      debug:
+        msg: "{{ mysql_test.stdout }}"

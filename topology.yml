@@ -39,3 +39,4 @@ groups:
   - name: user-accessible
     nodes:
       - student-vm
+      - attacker-vm
