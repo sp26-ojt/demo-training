@@ -39,7 +39,7 @@
         content: |
           [mysqld]
           log_error = /var/log/mysql/error.log
-          log_warnings = 2
+          log_warnings = 9
         mode: "0644"
       notify: Restart mysql
 
@@ -70,40 +70,6 @@
         name: "{{ lab_user }}"
         groups: mysql
         append: yes
-
-    # Tạo MySQL user giả để bruteforce attempt có thể bị log
-    - name: Install python3-pymysql for MySQL module
-      apt:
-        name: python3-pymysql
-        state: present
-
-    - name: Create dummy MySQL users for bruteforce targets
-      shell: |
-        mysql -u root -S /run/mysqld/mysqld.sock -e "
-          CREATE USER IF NOT EXISTS 'dbuser'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'admin'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'dbadmin'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'test'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'guest'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'backup'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'deploy'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'app'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'webapp'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'api'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'monitor'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'developer'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'ubuntu'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'postgres'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'oracle'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'sa'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'dba'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'readonly'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'replication'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'nagios'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'zabbix'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          CREATE USER IF NOT EXISTS 'prometheus'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws';
-          FLUSH PRIVILEGES;
-        "
 
     # logwriter user: SSH vào để inject flag vào MySQL error log
     - name: Create logwriter user
