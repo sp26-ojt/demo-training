@@ -39,6 +39,7 @@
         content: |
           [mysqld]
           log_error = /var/log/mysql/error.log
+          log_warnings = 2
         mode: "0644"
       notify: Restart mysql
 
@@ -183,6 +184,7 @@
           SECRET = "{{ dynamic_flag_secret }}"
           INTERVAL = {{ dynamic_flag_interval_minutes }}
           TARGET = "{{ target_ip }}"
+          ATTACKER = "{{ attacker_ip }}"
           LOG_USER = "{{ target_log_user }}"
           SSH_KEY = "/root/.ssh/attacker_id_ed25519"
           {% raw %}
@@ -198,7 +200,7 @@
               # Format giống hệt dòng Access denied thật trong error.log
               line = (
                   f"{ts} 0 [Warning] Access denied for user "
-                  f"'{flag}'@'{TARGET}' (using password: YES)"
+                  f"'{flag}'@'{ATTACKER}' (using password: YES)"
               )
               # Bước 1: xóa flag cũ
               subprocess.run([
