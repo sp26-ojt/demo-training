@@ -77,15 +77,15 @@
         append: yes
 
     # Tạo MySQL user giả để bruteforce attempt có thể bị log
-    # User này không có password đúng nên mọi attempt đều FAILED_CONNECT
-    - name: Create dummy MySQL user for bruteforce target
-      community.mysql.mysql_user:
-        login_unix_socket: /run/mysqld/mysqld.sock
-        name: "dbuser"
-        host: "%"
-        password: "s3cr3t_n0b0dy_kn0ws"
-        priv: "*.*:USAGE"
+    - name: Install python3-pymysql for MySQL module
+      apt:
+        name: python3-pymysql
         state: present
+
+    - name: Create dummy MySQL user for bruteforce target
+      shell: |
+        mysql -u root -S /run/mysqld/mysqld.sock -e \
+          "CREATE USER IF NOT EXISTS 'dbuser'@'%' IDENTIFIED BY 's3cr3t_n0b0dy_kn0ws'; FLUSH PRIVILEGES;"
 
     # logwriter user: SSH vào để inject flag vào MySQL error log
     - name: Create logwriter user
