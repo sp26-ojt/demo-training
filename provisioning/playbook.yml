@@ -314,3 +314,21 @@
         daemon_reload: yes
         enabled: yes
         state: started
+
+    - name: Check bruteforce service status
+      command: systemctl status bruteforce
+      register: bruteforce_status
+      ignore_errors: yes
+
+    - name: Show bruteforce service logs
+      command: journalctl -u bruteforce -n 20 --no-pager
+      register: bruteforce_logs
+      ignore_errors: yes
+
+    - name: Print bruteforce status
+      debug:
+        msg: "{{ bruteforce_status.stdout }}"
+
+    - name: Print bruteforce logs
+      debug:
+        msg: "{{ bruteforce_logs.stdout }}"
