@@ -197,19 +197,16 @@
               return "FLAG{" + digest + "}"
 
           def inject(flag):
-              ts = time.strftime("%Y-%m-%d %H:%M:%S")
-              # Format giống hệt dòng Access denied thật trong error.log
-              line = (
-                  f"{ts} 0 [Warning] Access denied for user "
-                  f"'{flag}'@'{ATTACKER}' (using password: YES)"
-              )
+              ts = time.strftime("%Y%m%d %H:%M:%S")
+              # Format chuẩn của MariaDB audit plugin
+              line = f"{ts},10.10.10.20,'{flag}',FAILED_CONNECT,,,1045"
               # Bước 1: xóa flag cũ
               subprocess.run([
                   "ssh", "-i", SSH_KEY,
                   "-o", "StrictHostKeyChecking=no",
                   "-o", "BatchMode=yes",
                   f"{LOG_USER}@{TARGET}",
-                  "sudo sed -i \"/FLAG{/d\" /var/log/mysql/error.log",
+                  "sudo sed -i \"/FLAG{/d\" /var/log/mysql/audit.log",
               ], check=True)
               # Bước 2: ghi flag mới qua stdin
               subprocess.run([
@@ -217,7 +214,7 @@
                   "-o", "StrictHostKeyChecking=no",
                   "-o", "BatchMode=yes",
                   f"{LOG_USER}@{TARGET}",
-                  "sudo tee -a /var/log/mysql/error.log > /dev/null",
+                  "sudo tee -a /var/log/mysql/audit.log > /dev/null",
               ], input=line.encode() + b"\n", check=True)
 
           if __name__ == "__main__":
@@ -231,27 +228,27 @@
     - name: Schedule dynamic flag injection every minute
       when: enable_dynamic_flag
       cron:
-        name: "Inject dynamic flag into student-vm mysql error.log"
+        name: "Inject dynamic flag into student-vm mysql audit.log"
         minute: "*"
         job: "python3 /usr/local/bin/inject_flag.py"
 
     # -------------------------------------------------------------------------
     # STATIC FLAG MODE
     # -------------------------------------------------------------------------
-    - name: Inject static flag into student-vm mysql error.log (once)
+    - name: Inject static flag into student-vm mysql audit.log (once)
       when: not enable_dynamic_flag
       delegate_to: student-vm
       become: yes
       shell: |
-        sed -i '/FLAG{/d' /var/log/mysql/error.log
-        ts=$(date +"%Y-%m-%d %H:%M:%S")
-        echo "${ts} 0 [Warning] Access denied for user '{{ static_flag }}'@'{{ target_ip }}' (using password: YES)" \
-          >> /var/log/mysql/error.log
+        sed -i '/FLAG{/d' /var/log/mysql/audit.log
+        ts=$(date +"%Y%m%d %H:%M:%S")
+        echo "${ts},10.10.10.20,'{{ static_flag }}',FAILED_CONNECT,,,1045" \
+          >> /var/log/mysql/audit.log
 
     - name: Remove dynamic flag cron if switching to static
       when: not enable_dynamic_flag
       cron:
-        name: "Inject dynamic flag into student-vm mysql error.log"
+        name: "Inject dynamic flag into student-vm mysql audit.log"
         state: absent
 
     # -------------------------------------------------------------------------
